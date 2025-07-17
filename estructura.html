@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Observación de Aves Chilenas</title>
+    <link rel="stylesheet" href="estilo.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="contenedor">
+        <h1>Registro de Observación de Aves Chilenas</h1>
+        
+        <form id="formularioAves">
+            <div class="grupo-formulario">
+                <label for="nombreObservador">Nombre del Observador:</label>
+                <input type="text" id="nombreObservador" required oninvalid="this.setCustomValidity('Por favor ingresa tu nombre')" oninput="this.setCustomValidity('')">
+                <div class="mensaje-error" id="errorNombre"></div>
+            </div>
+            
+            <div class="grupo-formulario">
+                <label for="email">Email:</label>
+                <input type="email" id="email" required oninvalid="this.setCustomValidity('Por favor ingresa un email válido')" oninput="this.setCustomValidity('')">
+                <div class="mensaje-error" id="errorEmail"></div>
+            </div>
+            
+            <div class="grupo-formulario">
+                <label for="fechaObservacion">Fecha de Observación:</label>
+                <input type="date" id="fechaObservacion" required oninvalid="this.setCustomValidity('Por favor ingresa fecha')" oninput="this.setCustomValidity('')">
+                <div class="mensaje-error" id="errorFecha"></div>
+            </div>
+            
+            <div class="grupo-formulario">
+                <label for="ubicacion">Ubicación:</label>
+                <button type="button" id="btnMapa" style="margin-bottom:8px; background:#3498db; color:#fff; border:none; border-radius:4px; padding:8px 16px; cursor:pointer; font-size:15px;">Seleccionar en el mapa</button>
+                <input type="text" id="ubicacion" required placeholder="Escribe la dirección o usa el mapa">
+                <div id="coordenadas" style="margin-top:5px; font-size:14px; color:#555;"></div>
+                <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px; display:none;"></div>
+                <div class="mensaje-error" id="errorUbicacion"></div>
+            </div>
+            
+            <div class="grupo-formulario">
+                <label for="ave">Selecciona un Ave:</label>
+                <select id="ave" required>
+                    <option value="">-- Selecciona un ave --</option>
+                    <!-- Las opciones se llenarán con JavaScript -->
+                </select>
+                <div class="mensaje-error" id="errorAve"></div>
+            </div>
+            
+            <div class="grupo-formulario" id="infoAve" style="display:none;">
+                <h3>Información del Ave Seleccionada</h3>
+                <p><strong>Nombre en Español:</strong> <span id="nombreEspanol"></span></p>
+                <p><strong>Nombre en Inglés:</strong> <span id="nombreIngles"></span></p>
+                <p><strong>Nombre Científico:</strong> <span id="nombreCientifico"></span></p>
+                <img id="imagenAve" src="" alt="Imagen del ave" style="max-width: 200px;">
+            </div>
+            
+            <div class="grupo-formulario">
+                <label for="comentarios">Comentarios:</label>
+                <textarea id="comentarios" rows="4"></textarea>
+            </div>
+            
+            <div class="acciones-formulario">
+                <button type="submit" id="btnGuardar">Guardar Observación</button>
+                <button type="button" id="btnLimpiar">Limpiar Formulario</button>
+            </div>
+        </form>
+        
+        <div id="listaObservaciones">
+            <h2>Observaciones Registradas</h2>
+            <table id="tablaObservaciones">
+                <thead>
+                    <tr>
+                        <th>Observador</th>
+                        <th>Email</th>
+                        <th>Fecha</th>
+                        <th>Ubicación</th>
+                        <th>Ave</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Las filas se llenarán con JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="formulario.js"></script>
+    <!-- Leaflet CSS y JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</body>
+</html>
