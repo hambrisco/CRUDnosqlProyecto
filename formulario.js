@@ -1,3 +1,45 @@
+// Reemplazar LocalStorage por llamadas a la API
+async function cargarObservacionesDesdeMongoDB() {
+    try {
+        const response = await fetch('/api/observaciones');
+        if (!response.ok) throw new Error('Error al cargar observaciones');
+        observaciones = await response.json();
+        mostrarObservaciones();
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarMensajeError('Error al cargar observaciones. Intente más tarde.');
+    }
+}
+
+async function guardarObservacionEnMongoDB(observacion) {
+    const method = editando ? 'PUT' : 'POST';
+    const url = editando ? `/api/observaciones/${observacion.id}` : '/api/observaciones';
+    
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(observacion)
+        });
+        
+        if (!response.ok) throw new Error('Error al guardar');
+        return await response.json();
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
+
+async function eliminarObservacionDeMongoDB(id) {
+    try {
+        const response = await fetch(`/api/observaciones/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Error al eliminar');
+        return true;
+    } catch (error) {
+        console.error('Error:', error);
+        throw error;
+    }
+}
 // Variables globales
 let observaciones = [];
 let editando = false;
@@ -6,7 +48,7 @@ let idEdicion = null;
 // Esperar a que el DOM esté listo
 $(document).ready(function() {
     cargarAvesDesdeAPI();
-    cargarObservacionesDesdeLocalStorage();
+    cargarObservacionesDesdeMongoDB();
     // Eventos
     $('#ave').change(mostrarInformacionAve);
     $('#formularioAves').submit(manejarEnvioFormulario);
@@ -81,9 +123,41 @@ function llenarSelectAves(aves) {
     select.empty();
     select.append('<option value="">-- Selecciona un ave --</option>');
     aves.sort((a, b) => a.name.spanish.localeCompare(b.name.spanish));
-    aves.forEach(ave => {
+    aves.slice(0, 20).forEach(ave => {
         select.append(`<option value="${ave.uid}" data-ave='${JSON.stringify(ave)}'>${ave.name.spanish}</option>`);
     });
+    // Buscar usuario y mostrar sus avistamientos
+    $('#btnBuscarUsuario').click(async function() {
+        const query = $('#buscarUsuario').val().trim().toLowerCase();
+        if (!query) return;
+        let lista = observaciones.filter(obs =>
+            obs.nombreObservador.toLowerCase().includes(query) ||
+            obs.email.toLowerCase().includes(query)
+        );
+        mostrarResultadosUsuario(lista, query);
+    });
+
+    // Filtrar por fecha
+    $('#btnFiltrarFecha').click(function() {
+        const fecha = $('#filtrarFecha').val();
+        if (!fecha) return;
+        let lista = observaciones.filter(obs => obs.fechaObservacion === fecha);
+        mostrarResultadosUsuario(lista, 'Fecha: ' + fecha);
+    });
+// Mostrar resultados de usuario o filtro
+function mostrarResultadosUsuario(lista, criterio) {
+    const div = $('#resultadosUsuario');
+    if (!lista.length) {
+        div.html(`<strong>No se encontraron resultados para: ${criterio}</strong>`);
+        return;
+    }
+    let html = `<strong>Resultados para: ${criterio}</strong><ul>`;
+    lista.forEach(obs => {
+        html += `<li><b>${obs.nombreObservador}</b> (${obs.email}) - ${obs.fechaObservacion} - ${obs.ubicacion} - ${obs.aveNombre}</li>`;
+    });
+    html += '</ul>';
+    div.html(html);
+}
 }
 
 // Mostrar información del ave seleccionada
@@ -104,13 +178,11 @@ function mostrarInformacionAve() {
 // Manejar el envío del formulario
 function manejarEnvioFormulario(e) {
     e.preventDefault();
-    
     if (!validarFormulario()) {
         return;
     }
-    
     const observacion = {
-        id: editando ? idEdicion : Date.now(),
+        id: editando ? idEdicion : undefined,
         nombreObservador: $('#nombreObservador').val(),
         email: $('#email').val(),
         fechaObservacion: $('#fechaObservacion').val(),
@@ -120,15 +192,15 @@ function manejarEnvioFormulario(e) {
         comentarios: $('#comentarios').val(),
         fechaRegistro: new Date().toISOString()
     };
-    
-    if (editando) {
-        actualizarObservacion(observacion);
-    } else {
-        agregarObservacion(observacion);
-    }
-    
-    limpiarFormulario();
-    mostrarObservaciones();
+    guardarObservacionEnMongoDB(observacion)
+        .then(() => {
+            limpiarFormulario();
+            cargarObservacionesDesdeMongoDB();
+            mostrarMensajeExito(editando ? 'Observación actualizada correctamente' : 'Observación agregada correctamente');
+            editando = false;
+            idEdicion = null;
+        })
+        .catch(() => mostrarMensajeError('Error al guardar la observación.'));
 }
 
 // Validar el formulario
@@ -189,29 +261,23 @@ function validarEmail(email) {
 
 // Agregar nueva observación
 function agregarObservacion(observacion) {
-    observaciones.push(observacion);
-    guardarObservacionesEnLocalStorage();
-    mostrarMensajeExito('Observación agregada correctamente');
+    // Ya no se usa LocalStorage. CRUD se hace por API.
 }
 
 // Actualizar observación existente
 function actualizarObservacion(observacionActualizada) {
-    observaciones = observaciones.map(obs => 
-        obs.id === observacionActualizada.id ? observacionActualizada : obs
-    );
-    guardarObservacionesEnLocalStorage();
-    mostrarMensajeExito('Observación actualizada correctamente');
-    editando = false;
-    idEdicion = null;
+    // Ya no se usa LocalStorage. CRUD se hace por API.
 }
 
 // Eliminar observación
 function eliminarObservacion(id) {
     if (confirm('¿Está seguro que desea eliminar esta observación?')) {
-        observaciones = observaciones.filter(obs => obs.id !== id);
-        guardarObservacionesEnLocalStorage();
-        mostrarObservaciones();
-        mostrarMensajeExito('Observación eliminada correctamente');
+        eliminarObservacionDeMongoDB(id)
+            .then(() => {
+                cargarObservacionesDesdeMongoDB();
+                mostrarMensajeExito('Observación eliminada correctamente');
+            })
+            .catch(() => mostrarMensajeError('Error al eliminar la observación.'));
     }
 }
 
@@ -273,16 +339,12 @@ function mostrarObservaciones() {
 
 // Cargar observaciones desde LocalStorage
 function cargarObservacionesDesdeLocalStorage() {
-    const datos = localStorage.getItem('observacionesAves');
-    if (datos) {
-        observaciones = JSON.parse(datos);
-        mostrarObservaciones();
-    }
+    // Eliminado: ya no se usa LocalStorage
 }
 
 // Guardar observaciones en LocalStorage
 function guardarObservacionesEnLocalStorage() {
-    localStorage.setItem('observacionesAves', JSON.stringify(observaciones));
+    // Eliminado: ya no se usa LocalStorage
 }
 
 // Limpiar el formulario

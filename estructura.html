@@ -10,7 +10,21 @@
 <body>
     <div class="contenedor">
         <h1>Registro de Observación de Aves Chilenas</h1>
-        
+
+        <!-- Buscador y filtro fuera del formulario para no ser afectados por limpiar -->
+        <div class="grupo-formulario" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div>
+                <label for="buscarUsuario">Buscar usuario:</label>
+                <input type="text" id="buscarUsuario" placeholder="Nombre o email del observador">
+            </div>
+            <button type="button" id="btnBuscarUsuario" style="height:40px;">Buscar</button>
+            <div>
+                <label for="filtrarFecha">Filtrar por fecha:</label>
+                <input type="date" id="filtrarFecha">
+            </div>
+            <button type="button" id="btnFiltrarFecha" style="height:40px;">Filtrar</button>
+        </div>
+
         <form id="formularioAves">
             <div class="grupo-formulario">
                 <label for="nombreObservador">Nombre del Observador:</label>
@@ -62,13 +76,14 @@
             </div>
             
             <div class="acciones-formulario">
-                <button type="submit" id="btnGuardar">Guardar Observación</button>
-                <button type="button" id="btnLimpiar">Limpiar Formulario</button>
+                <button type="submit" id="btnGuardar" class="btn-primario">Guardar Observación</button>
+                <button type="button" id="btnLimpiar" class="btn-secundario">Limpiar Formulario</button>
             </div>
         </form>
         
         <div id="listaObservaciones">
             <h2>Observaciones Registradas</h2>
+            <div id="resultadosUsuario" style="margin-bottom: 20px;"></div>
             <table id="tablaObservaciones">
                 <thead>
                     <tr>
