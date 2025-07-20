@@ -22,11 +22,19 @@ async function guardarObservacionEnMongoDB(observacion) {
             body: JSON.stringify(observacion)
         });
         
-        if (!response.ok) throw new Error('Error al guardar');
-        return await response.json();
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.message || `Error al ${editando ? 'actualizar' : 'crear'} la observación`);
+        }
+
+        const data = await response.json();
+        if (!data) {
+            throw new Error('No se recibió respuesta del servidor');
+        }
+        return data;
     } catch (error) {
-        console.error('Error:', error);
-        throw error;
+        console.error('Error al guardar observación:', error);
+        throw new Error(error.message || 'Error en la comunicación con el servidor');
     }
 }
 
@@ -55,37 +63,63 @@ $(document).ready(function() {
     $('#btnLimpiar').click(limpiarFormulario);
 
     // Mapa Leaflet: inicializar solo al mostrar
-    let map, marker;
+    let map = null;
+    let marker = null;
+    
+    function initMap() {
+        if (map) {
+            map.remove();
+        }
+        
+        // Asegurarse de que el contenedor del mapa tenga un alto definido
+        $('#map').css('height', '400px');
+        
+        map = L.map('map').setView([-33.45, -70.66], 6);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Forzar un reajuste del mapa después de mostrarlo
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+
+        return map;
+    }
+
+    // Manejar el evento de clic en el botón del mapa
     $('#btnMapa').click(function() {
         const mapDiv = $('#map');
         if (mapDiv.css('display') === 'none') {
             mapDiv.show();
             $(this).text('Cerrar mapa');
-            setTimeout(function() {
-                if (map) {
-                    map.remove();
-                    map = null;
+            
+            // Inicializar el mapa después de mostrar el div
+            const currentMap = initMap();
+            
+            // Configurar el evento de clic en el mapa
+            currentMap.on('click', function(e) {
+                if (marker) {
+                    currentMap.removeLayer(marker);
                 }
-                map = L.map('map').setView([-33.45, -70.66], 6);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 18,
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-                map.on('click', function(e) {
-                    if (marker) map.removeLayer(marker);
-                    marker = L.marker(e.latlng).addTo(map);
-                    $('#ubicacion').val('');
-                    $('#coordenadas').text('Coordenadas: ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
-                    // Geocoding inverso con Nominatim
-                    fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + e.latlng.lat + '&lon=' + e.latlng.lng)
-                      .then(resp => resp.json())
-                      .then(data => {
+                marker = L.marker(e.latlng).addTo(currentMap);
+                $('#coordenadas').text(`Coordenadas: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
+                
+                // Geocoding inverso con Nominatim
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+                    .then(resp => resp.json())
+                    .then(data => {
                         if (data.display_name) {
-                          $('#ubicacion').val(data.display_name);
+                            $('#ubicacion').val(data.display_name);
                         }
-                      });
-                });
-            }, 100);
+                    })
+                    .catch(error => {
+                        console.error('Error en geocoding:', error);
+                        $('#ubicacion').val(`${e.latlng.lat}, ${e.latlng.lng}`);
+                    });
+            });
         } else {
             mapDiv.hide();
             $(this).text('Seleccionar en el mapa');
@@ -119,13 +153,50 @@ function cargarAvesDesdeAPI() {
 
 // Llenar el select con las aves
 function llenarSelectAves(aves) {
-    const select = $('#ave');
-    select.empty();
-    select.append('<option value="">-- Selecciona un ave --</option>');
+    const contenedor = $('<div>').addClass('aves-grid');
     aves.sort((a, b) => a.name.spanish.localeCompare(b.name.spanish));
-    aves.slice(0, 20).forEach(ave => {
-        select.append(`<option value="${ave.uid}" data-ave='${JSON.stringify(ave)}'>${ave.name.spanish}</option>`);
+    
+    // Crear el campo oculto para mantener los valores seleccionados
+    const select = $('#ave');
+    select.hide();
+    select.empty();
+    
+    // Crear la cuadrícula de aves
+    aves.forEach(ave => {
+        const aveCard = $(`
+            <div class="ave-card" data-uid="${ave.uid}" data-ave='${JSON.stringify(ave)}'>
+                <img src="${ave.images.thumb || ave.images.main}" alt="${ave.name.spanish}">
+                <div class="ave-card-info">
+                    <strong>${ave.name.spanish}</strong>
+                    <em>${ave.name.latin}</em>
+                </div>
+            </div>
+        `);
+        
+        // Agregar evento de clic
+        aveCard.click(function() {
+            $(this).toggleClass('selected');
+            actualizarSeleccionAves();
+        });
+        
+        contenedor.append(aveCard);
+        select.append(`<option value="${ave.uid}">${ave.name.spanish}</option>`);
     });
+    });
+    
+    // Reemplazar el select original con la cuadrícula
+    select.after(contenedor);
+    
+    // Función para actualizar la selección en el select oculto
+    function actualizarSeleccionAves() {
+        const seleccionadas = $('.ave-card.selected').map(function() {
+            return $(this).data('uid');
+        }).get();
+        
+        select.val(seleccionadas);
+        select.trigger('change');
+    }
+    
     // Buscar usuario y mostrar sus avistamientos
     $('#btnBuscarUsuario').click(async function() {
         const query = $('#buscarUsuario').val().trim().toLowerCase();
@@ -153,7 +224,16 @@ function mostrarResultadosUsuario(lista, criterio) {
     }
     let html = `<strong>Resultados para: ${criterio}</strong><ul>`;
     lista.forEach(obs => {
-        html += `<li><b>${obs.nombreObservador}</b> (${obs.email}) - ${obs.fechaObservacion} - ${obs.ubicacion} - ${obs.aveNombre}</li>`;
+        const avesInfo = obs.aves && Array.isArray(obs.aves)
+            ? obs.aves.map(a => a.nombreEspanol).join(', ')
+            : obs.aveNombre || 'Sin ave especificada';
+            
+        html += `<li>
+            <b>${obs.nombreObservador}</b> (${obs.email})<br>
+            <small>Fecha: ${obs.fechaObservacion}<br>
+            Ubicación: ${obs.ubicacion}<br>
+            Aves: ${avesInfo}</small>
+        </li>`;
     });
     html += '</ul>';
     div.html(html);
@@ -162,45 +242,87 @@ function mostrarResultadosUsuario(lista, criterio) {
 
 // Mostrar información del ave seleccionada
 function mostrarInformacionAve() {
-    const seleccionado = $('#ave').find(':selected');
-    if (seleccionado.val() === '') {
+    const avesSeleccionadas = $('.ave-card.selected');
+    if (avesSeleccionadas.length === 0) {
         $('#infoAve').hide();
         return;
     }
-    const ave = JSON.parse(seleccionado.attr('data-ave'));
-    $('#nombreEspanol').text(ave.name.spanish);
-    $('#nombreIngles').text(ave.name.english);
-    $('#nombreCientifico').text(ave.name.latin);
-    $('#imagenAve').attr('src', ave.images.main);
+
+    // Limpiar contenedor de información
+    $('#infoAve').empty();
+    
+    // Mostrar resumen de selección
+    const numSeleccionadas = seleccionados.length;
+    $('#infoAve').append(`
+        <div class="aves-seleccionadas">
+            <strong>${numSeleccionadas} ${numSeleccionadas === 1 ? 'ave seleccionada' : 'aves seleccionadas'}</strong>
+        </div>
+    `);
+    
+    // Mostrar información detallada del último ave seleccionada
+    const ave = JSON.parse(seleccionados.last().attr('data-ave'));
+    $('#infoAve').append(`
+        <div class="ave-details">
+            <img src="${ave.images.main}" alt="${ave.name.spanish}" class="ave-imagen">
+            <div class="ave-info">
+                <p><strong>Nombre español:</strong> ${ave.name.spanish}</p>
+                <p><strong>Nombre inglés:</strong> ${ave.name.english}</p>
+                <p><strong>Nombre científico:</strong> <em>${ave.name.latin}</em></p>
+            </div>
+        </div>
+    `);
+    
+    // Si hay múltiples aves, mostrar lista de todas las seleccionadas
+    if (numSeleccionadas > 1) {
+        const listaAves = $('<div class="aves-lista"><h4>Todas las aves seleccionadas:</h4><ul></ul></div>');
+        seleccionados.each(function() {
+            const ave = JSON.parse($(this).attr('data-ave'));
+            listaAves.find('ul').append(`<li>${ave.name.spanish} <em>(${ave.name.latin})</em></li>`);
+        });
+        $('#infoAve').append(listaAves);
+    }
+    
     $('#infoAve').show();
 }
 
 // Manejar el envío del formulario
-function manejarEnvioFormulario(e) {
+async function manejarEnvioFormulario(e) {
     e.preventDefault();
     if (!validarFormulario()) {
         return;
     }
-    const observacion = {
-        id: editando ? idEdicion : undefined,
-        nombreObservador: $('#nombreObservador').val(),
-        email: $('#email').val(),
-        fechaObservacion: $('#fechaObservacion').val(),
-        ubicacion: $('#ubicacion').val(),
-        aveId: $('#ave').val(),
-        aveNombre: $('#ave').find(':selected').text(),
-        comentarios: $('#comentarios').val(),
-        fechaRegistro: new Date().toISOString()
-    };
-    guardarObservacionEnMongoDB(observacion)
-        .then(() => {
-            limpiarFormulario();
-            cargarObservacionesDesdeMongoDB();
-            mostrarMensajeExito(editando ? 'Observación actualizada correctamente' : 'Observación agregada correctamente');
-            editando = false;
-            idEdicion = null;
-        })
-        .catch(() => mostrarMensajeError('Error al guardar la observación.'));
+    try {
+        const avesSeleccionadas = $('#ave').find(':selected').toArray().map(opt => {
+            const ave = JSON.parse($(opt).attr('data-ave'));
+            return {
+                id: ave.uid,
+                nombreEspanol: ave.name.spanish,
+                nombreIngles: ave.name.english,
+                nombreCientifico: ave.name.latin,
+                imagenUrl: ave.images.main
+            };
+        });
+
+        const observacion = {
+            id: editando ? idEdicion : undefined,
+            nombreObservador: $('#nombreObservador').val().trim(),
+            email: $('#email').val().trim(),
+            fechaObservacion: $('#fechaObservacion').val(),
+            ubicacion: $('#ubicacion').val().trim(),
+            aves: avesSeleccionadas,
+            comentarios: $('#comentarios').val().trim(),
+            fechaRegistro: new Date().toISOString()
+        };
+        await guardarObservacionEnMongoDB(observacion);
+        limpiarFormulario();
+        await cargarObservacionesDesdeMongoDB();
+        mostrarMensajeExito(editando ? 'Observación actualizada correctamente' : 'Observación agregada correctamente');
+        editando = false;
+        idEdicion = null;
+    } catch (error) {
+        console.error('Error al procesar la observación:', error);
+        mostrarMensajeError('Error al guardar la observación: ' + (error.message || 'Error desconocido'));
+    }
 }
 
 // Validar el formulario
@@ -240,9 +362,9 @@ function validarFormulario() {
         $('#errorUbicacion').text('');
     }
     
-    // Validar ave
-    if ($('#ave').val() === '') {
-        $('#errorAve').text('Por favor seleccione un ave');
+    // Validar ave(s)
+    if ($('#ave').val() === null || $('#ave').val().length === 0) {
+        $('#errorAve').text('Por favor seleccione al menos un ave');
         valido = false;
     } else {
         $('#errorAve').text('');
@@ -258,7 +380,6 @@ function validarEmail(email) {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(email);
 }
-
 // Agregar nueva observación
 function agregarObservacion(observacion) {
     // Ya no se usa LocalStorage. CRUD se hace por API.
@@ -290,7 +411,12 @@ function editarObservacion(id) {
     $('#email').val(observacion.email);
     $('#fechaObservacion').val(observacion.fechaObservacion);
     $('#ubicacion').val(observacion.ubicacion);
-    $('#ave').val(observacion.aveId).trigger('change');
+    if (observacion.aves && Array.isArray(observacion.aves)) {
+        const ids = observacion.aves.map(a => a.id);
+        $('#ave').val(ids).trigger('change');
+    } else if (observacion.aveId) {
+        $('#ave').val([observacion.aveId]).trigger('change');
+    }
     $('#comentarios').val(observacion.comentarios);
     
     editando = true;
@@ -311,6 +437,9 @@ function mostrarObservaciones() {
     
     observaciones.forEach(obs => {
         const fecha = new Date(obs.fechaObservacion).toLocaleDateString('es-CL');
+        const avesHtml = (obs.aves && Array.isArray(obs.aves))
+            ? obs.aves.map(a => `<div><b>${a.nombreEspanol}</b> <span style='font-size:12px;color:#888;'>(${a.nombreCientifico})</span></div>`).join('')
+            : obs.aveNombre || '';
         
         tbody.append(`
             <tr>
@@ -318,7 +447,7 @@ function mostrarObservaciones() {
                 <td>${obs.email}</td>
                 <td>${fecha}</td>
                 <td>${obs.ubicacion}</td>
-                <td>${obs.aveNombre}</td>
+                <td>${avesHtml}</td>
                 <td>
                     <button class="btn-editar" data-id="${obs.id}">Editar</button>
                     <button class="btn-eliminar" data-id="${obs.id}">Eliminar</button>
@@ -350,8 +479,10 @@ function guardarObservacionesEnLocalStorage() {
 // Limpiar el formulario
 function limpiarFormulario() {
     $('#formularioAves')[0].reset();
-    $('#infoAve').hide();
+    $('#ave').val([]).trigger('change'); // Limpiar selección múltiple
+    $('#infoAve').hide().empty();
     $('.mensaje-error').text('');
+    $('#coordenadas').text('');
     
     if (editando) {
         editando = false;
@@ -362,10 +493,52 @@ function limpiarFormulario() {
 
 // Mostrar mensaje de éxito
 function mostrarMensajeExito(mensaje) {
-    alert(mensaje); // Podrías reemplazar esto con un toast o mensaje en pantalla
+    const div = $('<div>')
+        .addClass('mensaje-exito')
+        .text(mensaje)
+        .css({
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            padding: '15px 25px',
+            background: '#4CAF50',
+            color: 'white',
+            borderRadius: '5px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            zIndex: 1000
+        });
+    
+    $('body').append(div);
+    
+    setTimeout(() => {
+        div.fadeOut('slow', function() {
+            $(this).remove();
+        });
+    }, 3000);
 }
 
 // Mostrar mensaje de error
 function mostrarMensajeError(mensaje) {
-    alert('Error: ' + mensaje); // Podrías reemplazar esto con un toast o mensaje en pantalla
+    const div = $('<div>')
+        .addClass('mensaje-error')
+        .text(mensaje)
+        .css({
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            padding: '15px 25px',
+            background: '#f44336',
+            color: 'white',
+            borderRadius: '5px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            zIndex: 1000
+        });
+    
+    $('body').append(div);
+    
+    setTimeout(() => {
+        div.fadeOut('slow', function() {
+            $(this).remove();
+        });
+    }, 5000);
 }

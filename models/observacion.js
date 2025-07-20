@@ -11,15 +11,14 @@ const observacionSchema = new mongoose.Schema({
             lng: { type: Number }
         }
     },
-    ave: {
+    aves: [
+    {
         id: { type: String, required: true },
         nombreEspanol: { type: String, required: true },
         nombreIngles: { type: String },
         nombreCientifico: { type: String },
         imagenUrl: { type: String }
-    },
-    comentarios: { type: String },
-    fechaRegistro: { type: Date, default: Date.now }
-});
+    }
+],
 
 module.exports = mongoose.model('Observacion', observacionSchema);
