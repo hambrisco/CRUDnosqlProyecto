@@ -19,6 +19,7 @@ const observacionSchema = new mongoose.Schema({
         nombreCientifico: { type: String },
         imagenUrl: { type: String }
     }
-],
+  ]
+});
 
 module.exports = mongoose.model('Observacion', observacionSchema);
